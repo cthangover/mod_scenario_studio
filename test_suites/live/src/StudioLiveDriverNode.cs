@@ -628,7 +628,7 @@ namespace Cthangover.Mods.ScenarioStudio.Tests.Live
                 return;
             _finished = true;
             GameLogger.Log("TEST", $"[TEST_RESULT] name={ResultName} passed={_passed} failed={_failed}");
-            GetTree().Quit(_failed == 0 ? 0 : 1);
+            Cthangover.Core.Bootstrap.ApplicationExit.Quit(GetTree(), _failed == 0 ? 0 : 1);
         }
 
         private static void Log(string message) => GameLogger.Log("TEST", message);
