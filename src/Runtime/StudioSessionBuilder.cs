@@ -1,6 +1,7 @@
 namespace Cthangover.Mods.ScenarioStudio
 {
     using System.Collections.Generic;
+    using System.Linq;
     using Cthangover.Core.Bootstrap;
     using Cthangover.Core.Mods.Resolvers;
     using Cthangover.Core.Quests;
@@ -149,6 +150,9 @@ namespace Cthangover.Mods.ScenarioStudio
             {
                 foreach (var variable in box.Runtime.Variables)
                     Add(session, "studio/group_dialog_vars", StudioText.Raw("${" + variable.Key + "}"), StudioText.Raw(variable.Value), StudioStateEditor.DialogVariable, variable.Key);
+                var scope = box.Runtime.Dialog?.Scope;
+                if (!string.IsNullOrEmpty(scope))
+                    FillSelf(session, runtime.Flags, scope);
             }
 
             var quests = QuestServiceRegistry.Provider;
@@ -174,6 +178,46 @@ namespace Cthangover.Mods.ScenarioStudio
 
             foreach (var id in runtime.CompletedScenarioIds)
                 Add(session, "studio/group_completed", StudioText.Raw(id), new StudioText("studio/value_yes"), StudioStateEditor.None, id);
+        }
+
+        /// <summary>
+        /// The <c>self.</c> flags of the object whose interaction runs the dialog (plan 12.5): the story flags stored under
+        /// its scope (<see cref="ScenarioCondition.FlagKey"/>), shown as <c>self.&lt;name&gt;</c> next to the other state.
+        /// Editable (plan 14.G11): a value is written into the running game's story flags under its full key
+        /// (<see cref="StudioLive.EditState"/>); the mod's files are not touched. A flag the running scenario
+        /// names but nothing has set yet is listed with "-", so it can be set from here.
+        /// </summary>
+        private static void FillSelf(StudioSession session, Dictionary<string, string> flags, string scope)
+        {
+            Add(session, "studio/group_self", new StudioText("studio/self_scope"), StudioText.Raw(scope), StudioStateEditor.None, null);
+            var prefix = scope + ":";
+            var shown = new HashSet<string>(System.StringComparer.Ordinal);
+            foreach (var pair in flags.Where(p => p.Key.StartsWith(prefix, System.StringComparison.Ordinal)).OrderBy(p => p.Key, System.StringComparer.Ordinal))
+            {
+                shown.Add(pair.Key);
+                Add(session, "studio/group_self", StudioText.Raw(ScenarioCondition.SelfPrefix + "." + pair.Key.Substring(prefix.Length)), StudioText.Raw(pair.Value), StudioStateEditor.SelfFlag, pair.Key);
+            }
+            foreach (var name in SelfNames(session.Lines))
+            {
+                if (shown.Add(prefix + name))
+                    Add(session, "studio/group_self", StudioText.Raw(ScenarioCondition.SelfPrefix + "." + name), StudioText.Raw("-"), StudioStateEditor.SelfFlag, prefix + name);
+            }
+        }
+
+        /// <summary>The names of the <c>self.&lt;name&gt;</c> flags the lines use, in order of appearance, without repeats.</summary>
+        private static IEnumerable<string> SelfNames(List<StudioCodeLine> lines)
+        {
+            var seen = new HashSet<string>(System.StringComparer.Ordinal);
+            var token = new System.Text.RegularExpressions.Regex(@"\bself\.([A-Za-z_][A-Za-z0-9_]*)");
+            foreach (var line in lines)
+            {
+                foreach (System.Text.RegularExpressions.Match match in token.Matches(line.Text ?? string.Empty))
+                {
+                    var name = match.Groups[1].Value;
+                    if (seen.Add(name))
+                        yield return name;
+                }
+            }
         }
 
         private static IEnumerable<string> QuestIds(List<StudioCodeLine> lines)

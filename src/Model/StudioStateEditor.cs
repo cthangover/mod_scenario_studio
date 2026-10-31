@@ -7,5 +7,7 @@ namespace Cthangover.Mods.ScenarioStudio
         DialogVariable,
         Inventory,
         Quest,
+        /// <summary>A story flag of the running object's scope (<c>self.&lt;name&gt;</c>): the value is the full flag key.</summary>
+        SelfFlag,
     }
 }

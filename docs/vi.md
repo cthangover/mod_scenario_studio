@@ -39,11 +39,14 @@ Thẻ **Trạng thái** hiển thị trạng thái game theo từng chủ sở h
 
 ![Thẻ Nhật ký: vào home_kitchen, home_kitchen_cooking bắt đầu, chỉnh sửa "+6 → my_studio", các lần khởi động lại, "điểm ngắt, dòng 6", "dòng tiếp theo chuyển tới 5", "điểm kiểm tra trong home_kitchen".](assets/dock-log.jpg)
 
+Nhóm **Đối tượng (self.)** liệt kê các cờ `self.` của đối tượng đang chạy hội thoại. Cũng có thể nhập giá trị tại đây: 1 hoặc 0 đặt cờ của đối tượng đó trong trò chơi đang chạy, và lần kiểm tra trạng thái hay kịch bản kế tiếp sẽ thấy nó.
+
 ## Thay đổi được ghi vào đâu
 
 - Mod cài dưới dạng thư mục có thể được sửa trực tiếp.
 - Nếu không, thay đổi sẽ vào **lớp xưởng** của game (`user://studio/<game>`), lớp này thắng mọi mod và không đụng tới các mod. Lớp có thể được xuất thành mod mới, rồi thêm vào bộ sưu tập của game.
 - **Tài nguyên** đọc lại các phông nền thả vào mod hoặc vào thư mục `backgrounds/` của lớp trong khi game chạy; sau đó có thể tạo cảnh mới trên phông nền đó ngay từ thẻ Bản đồ.
+- Giá trị `self.` nhập trong tab «Trạng thái» là cờ của trò chơi đang chạy: nó được lưu cùng trò chơi, không ghi tệp mod hay tệp lớp nào.
 
 ## Khi có trục trặc
 

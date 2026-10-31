@@ -39,11 +39,14 @@ La pestaña **Estado** muestra el estado del juego agrupado por dueño: el reloj
 
 ![La pestaña Registro: entrada en home_kitchen, home_kitchen_cooking empezado, la edición «+6 → my_studio», reinicios, «punto de ruptura, línea 6», «siguiente línea movida a 5», «punto de control en home_kitchen».](assets/dock-log.jpg)
 
+En el grupo **Objeto (self.)** aparecen los flags `self.` del objeto cuyo diálogo se ejecuta. También se puede escribir un valor aquí: 1 o 0 fija el flag de ese objeto en el juego en marcha, y la siguiente comprobación de sus estados y de su escenario lo verá.
+
 ## Dónde se escriben los cambios
 
 - Un mod instalado como carpeta se puede cambiar en el sitio.
 - Si no, los cambios van a la **capa de estudio** del juego (`user://studio/<game>`), que gana a todos los mods y los deja intactos. La capa se puede exportar como un mod nuevo, que luego se añade a la colección del juego.
 - **Recursos** vuelve a leer los fondos soltados en un mod o en la carpeta `backgrounds/` de la capa mientras el juego corre; sobre ese fondo se puede crear después una escena nueva desde la pestaña Mapa.
+- Un valor `self.` escrito en la pestaña «Estado» es un flag del juego en marcha: se guarda con la partida y no se escribe ningún archivo del mod ni de la capa.
 
 ## Si algo sale mal
 

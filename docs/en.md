@@ -35,7 +35,7 @@ The **Now** tab shows the moment on the screen: the line, the question and every
 
 ![The State tab: "Values can be changed to test another branch", the clock with day 24 and hour 23:00.](assets/dock-state.jpg)
 
-The **State** tab shows the game state grouped by owner: the clock, the variables of the running dialog, the quests the scenario refers to, the inventory and which scenarios already ran. Variables, item counts and quest status can be changed (Enter writes them into the game) to try another branch. **Scene** lists the scenarios of the current scene, **Map** shows the scenes and the ways between them (and where to drop new backgrounds), and **Log** records what happened:
+The **State** tab shows the game state grouped by owner: the clock, the variables of the running dialog, the quests the scenario refers to, the inventory and which scenarios already ran. Variables, item counts and quest status can be changed (Enter writes them into the game) to try another branch. Below them, the group **Object (self.)** lists the `self.` flags of the object whose dialog is running. A value can be typed here too: 1 or 0 sets that object's flag in the running game, and the next check of its states and scenario sees it. **Scene** lists the scenarios of the current scene, **Map** shows the scenes and the ways between them (and where to drop new backgrounds), and **Log** records what happened:
 
 ![The Log tab: entered home_kitchen, home_kitchen_cooking started, the edit "+6 → my_studio", restarts, "breakpoint, line 6", "next line moved to 5", "checkpoint in home_kitchen".](assets/dock-log.jpg)
 
@@ -44,6 +44,7 @@ The **State** tab shows the game state grouped by owner: the clock, the variable
 - A mod installed as a folder can be changed in place.
 - Otherwise changes go to the game's **studio layer** (`user://studio/<game>`), which wins over every mod and leaves the mods untouched. The layer can be exported as a new mod, which is then added to the game's collection.
 - **Resources** re-reads backgrounds dropped into a mod or into the layer's `backgrounds/` folder while the game runs; a new scene can then be made on such a background from the Map tab.
+- A `self.` value typed in the State tab is a flag of the running game: it is saved with the game, and no mod file or layer file is written.
 
 ## If something goes wrong
 

@@ -561,6 +561,12 @@ namespace Cthangover.Mods.ScenarioStudio
                 case StudioStateEditor.Quest:
                     QuestServiceRegistry.Provider?.SetStatus(entry.Id, value);
                     break;
+                case StudioStateEditor.SelfFlag:
+                    // The value is a plain story flag of the running game (14.G11): saved with the game, never a file.
+                    if (string.IsNullOrWhiteSpace(value))
+                        return;
+                    ScenarioCondition.SetFlag(entry.Id, value.Trim());
+                    break;
                 default:
                     return;
             }

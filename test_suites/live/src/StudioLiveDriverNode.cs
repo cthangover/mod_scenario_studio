@@ -1,10 +1,12 @@
 namespace Cthangover.Mods.ScenarioStudio.Tests.Live
 {
     using System.IO;
+    using System.Linq;
     using Cthangover.Core.Bootstrap;
     using Cthangover.Core.Factories.Impls;
     using Cthangover.Core.Mods;
     using Cthangover.Core.Scenes;
+    using Cthangover.Core.Settings;
     using Cthangover.Core.UI;
     using Cthangover.Core.Utils;
     using Cthangover.Mods.Dialog;
@@ -31,7 +33,9 @@ namespace Cthangover.Mods.ScenarioStudio.Tests.Live
     /// <item>breakpoint on the question, restart, hold before it; drags the
     ///   ▶ marker back onto the inserted line, continues from there and is held
     ///   by the breakpoint again, continue;</item>
-    /// <item>the Scene, State (a checkpoint is saved there), Log and Map tabs;</item>
+    /// <item>the Scene, State (a checkpoint is saved there), Log and Map tabs; in the State tab a <c>self.</c> flag of the
+    ///   running object is typed as 1: the running object's flag changes, the State tab shows it, the mod's files do not change
+    ///   (plan 14.G11);</item>
     /// <item>drops a picture into the layer's <c>backgrounds/</c> and reloads
     ///   the resources: it becomes a layer background;</item>
     /// <item>creates a scene in the layer on that background, goes there and sees
@@ -232,6 +236,8 @@ namespace Cthangover.Mods.ScenarioStudio.Tests.Live
                     Press(Root + "Tabs/Row/StateTab");
                     break;
                 case 19:
+                    CheckSelfFlags();
+                    EditSelfFlag();
                     Check(_panel.Session.State.Count > 0 && CountOf<StudioStateRow>() == _panel.Session.State.Count, "state tab: a row per state value");
                     Shot("state");
                     MenuPick(100);
@@ -368,6 +374,70 @@ namespace Cthangover.Mods.ScenarioStudio.Tests.Live
             var queue = Box?.Runtime.Dialog?.Queue;
             var index = Box?.Runtime.Index ?? -1;
             return queue != null && index >= 0 && index < queue.Count ? queue[index] : null;
+        }
+
+        /// <summary>
+        /// Plan 12.5: a running object's scope makes its <c>self.</c> flags show in the State tab. The scope and one flag
+        /// are set on the live dialog only for this check, then taken back (the flag removed, the scope cleared).
+        /// </summary>
+        private void CheckSelfFlags()
+        {
+            const string scope = "studio_test/kitchen_object";
+            const string flagKey = scope + ":open";
+            var flags = GameData.Instance.Runtime.Flags;
+            Box.Runtime.Dialog.Scope = scope;
+            flags[flagKey] = "1";
+            try
+            {
+                _panel.Refresh();
+                var rows = _panel.Session.State.Where(e => e.Group.Key == "studio/group_self").ToList();
+                Check(rows.Count == 2 && rows.Any(e => e.Key.Resolve() == "self.open" && e.Value.Resolve() == "1"),
+                    "state tab: the running object's self. flag shows under its scope");
+            }
+            finally
+            {
+                Box.Runtime.Dialog.Scope = null;
+                flags.Remove(flagKey);
+                _panel.Refresh();
+            }
+            Check(!_panel.Session.State.Any(e => e.Group.Key == "studio/group_self"), "without a scope the State tab has no self. group");
+        }
+
+        /// <summary>
+        /// Plan 14.G11: a <c>self.</c> flag of the running object is typed into the State tab. The row is editable; Enter writes
+        /// the value into the running game's flags under the scope's key (<see cref="StudioLive.EditState"/>), the flag reads
+        /// back at once, and the mod's files stay as they were. The scope and the flag are taken back afterwards.
+        /// </summary>
+        private void EditSelfFlag()
+        {
+            const string scope = "studio_test/kitchen_object";
+            const string flagKey = scope + ":open";
+            var flags = GameData.Instance.Runtime.Flags;
+            flags[flagKey] = "0";
+            Box.Runtime.Dialog.Scope = scope;
+            try
+            {
+                _panel.Refresh();
+                var row = Descendants<StudioStateRow>(_panel).FirstOrDefault(r => r.GetChildren().OfType<Label>().Any(l => l.Text == "self.open"));
+                Check(row != null, "state tab: the self.open row of the running object is listed");
+                var edit = row?.GetChildren().OfType<LineEdit>().FirstOrDefault();
+                Check(edit != null && edit.Editable, "state tab: the self.open value is editable");
+                if (edit == null)
+                    return;
+                edit.Text = "1";
+                edit.EmitSignal(LineEdit.SignalName.TextSubmitted, "1");
+                Check(flags.TryGetValue(flagKey, out var written) && written == "1", "typing 1 in the State tab sets the running object's flag");
+                _panel.Refresh();
+                var shown = Descendants<StudioStateRow>(_panel).FirstOrDefault(r => r.GetChildren().OfType<Label>().Any(l => l.Text == "self.open"));
+                Check(shown?.GetChildren().OfType<LineEdit>().FirstOrDefault()?.Text == "1", "the State tab shows the new value at once");
+                Check(ModManager.Instance.ReadFileText(_sourceMod, _sourcePath) == _originalText, "the self flag edit leaves the mod's file untouched");
+            }
+            finally
+            {
+                Box.Runtime.Dialog.Scope = null;
+                flags.Remove(flagKey);
+                _panel.Refresh();
+            }
         }
 
         private void Press(string path)
