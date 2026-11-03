@@ -1,6 +1,7 @@
 namespace Cthangover.Mods.ScenarioStudio
 {
     using System.Collections.Generic;
+    using Cthangover.Mods.Dialog;
     using Cthangover.Core.Bootstrap;
     using Cthangover.Core.UI.Theming;
     using Cthangover.Mods.Interface.Base.Lists;
@@ -39,6 +40,9 @@ namespace Cthangover.Mods.ScenarioStudio
         private const int CheckpointRestore = 101;
 
         private readonly StudioNowPage _nowPage = new();
+        private StudioBackgroundPage _backgroundPage;
+        private IBackgroundScenarioTools observationProvider;
+        public StudioBackgroundPage BackgroundPage => _backgroundPage;
         private readonly StudioNovicePage _novicePage = new();
         private readonly List<StudioDockDrag> _drags = new();
         private StudioMode _mode = StudioMode.Author;
@@ -144,19 +148,26 @@ namespace Cthangover.Mods.ScenarioStudio
                 GetNode<Button>(Root + "Tabs/Row/StateTab"),
                 GetNode<Button>(Root + "Tabs/Row/LogTab"),
                 GetNode<Button>(Root + "Tabs/Row/MapTab"),
+                GetNode<Button>(Root + "Tabs/Row/BackgroundTab"),
             };
             StudioStyles.SmallTab(_tabs[(int)StudioTab.Now], Tr("studio/tab_now"));
             StudioStyles.SmallTab(_tabs[(int)StudioTab.Scene], Tr("studio/tab_scene"));
             StudioStyles.SmallTab(_tabs[(int)StudioTab.State], Tr("studio/tab_state"));
             StudioStyles.SmallTab(_tabs[(int)StudioTab.Log], Tr("studio/tab_log"));
             StudioStyles.SmallTab(_tabs[(int)StudioTab.Map], Tr("studio/tab_map"));
+            StudioStyles.SmallTab(_tabs[(int)StudioTab.Background], Tr("studio/tab_background"));
             _tabs[(int)StudioTab.Now].Pressed += OnNowTabPressed;
             _tabs[(int)StudioTab.Scene].Pressed += OnSceneTabPressed;
             _tabs[(int)StudioTab.State].Pressed += OnStateTabPressed;
             _tabs[(int)StudioTab.Log].Pressed += OnLogTabPressed;
             _tabs[(int)StudioTab.Map].Pressed += OnMapTabPressed;
+            _tabs[(int)StudioTab.Background].Pressed += OnBackgroundTabPressed;
 
             _content = GetNode<VBoxContainer>(Root + "Body/Scroll/Content");
+            _backgroundPage = new StudioBackgroundPage { Visible = false };
+            _content.AddChild(_backgroundPage);
+            _backgroundPage.EnsureConstructed();
+            _backgroundPage.Changed += OnBackgroundChanged;
             _nowPage.BreakpointToggled += OnBreakpointToggled;
             _nowPage.InsertRequested += OnInsertRequested;
             _nowPage.NextLineRequested += OnNextLineRequested;
@@ -185,9 +196,31 @@ namespace Cthangover.Mods.ScenarioStudio
         /// <summary>Redraws at once whenever the dock is shown.</summary>
         protected override void ShowConstruct()
         {
+            observationProvider = BackgroundScenarios.Provider;
+            observationProvider?.Observe(this, true);
             _shownVersion = -1;
             if (_content != null)
                 Refresh();
+        }
+
+        protected override void HideDestruct()
+        {
+            observationProvider?.Observe(this, false);
+            observationProvider = null;
+        }
+        protected override void OnExitTree()
+        {
+            observationProvider?.Observe(this, false);
+            observationProvider = null;
+        }
+        private void OnBackgroundChanged()
+        {
+            if (_tab == StudioTab.Background) { RefreshHeader(); RefreshFooter(); }
+        }
+        public void ShowBackground(string scenarioId = null)
+        {
+            ShowTab(StudioTab.Background);
+            if (scenarioId != null) _backgroundPage.SelectScenario(scenarioId);
         }
 
         private void BuildRestartMenu(MenuButton button)
@@ -241,6 +274,9 @@ namespace Cthangover.Mods.ScenarioStudio
         private void RefreshHeader()
         {
             var state = _session.RunState;
+            if (_tab == StudioTab.Background)
+                state = _backgroundPage.SelectedRun == null ? StudioRunState.Idle
+                    : _backgroundPage.SelectedRun.Paused ? StudioRunState.Paused : StudioRunState.Running;
             var stopped = state == StudioRunState.Paused || state == StudioRunState.Held;
             StudioStyles.RunState(_runState, _runStateText, state, Tr(RunStateKey(state)));
             _pauseButton.SetPressedNoSignal(Live.Debugger.IsPaused);
@@ -259,6 +295,15 @@ namespace Cthangover.Mods.ScenarioStudio
             _noviceButton.SetPressedNoSignal(_mode == StudioMode.Novice);
             for (var i = 0; i < _tabs.Length; i++)
                 _tabs[i].SetPressedNoSignal(i == (int)_tab);
+            if (_tab == StudioTab.Background)
+            {
+                _pauseButton.SetPressedNoSignal(_backgroundPage.SelectedRun?.Paused == true);
+                _stepButton.Disabled = _backgroundPage.SelectedRun == null;
+                _continueButton.Disabled = _backgroundPage.SelectedRun?.Paused != true;
+                for (var i = 0; i < restartMenu.ItemCount; i++)
+                    if (!restartMenu.IsItemSeparator(i)) restartMenu.SetItemDisabled(i,
+                        restartMenu.GetItemId(i) != (int)StudioRestartMode.Scenario || _backgroundPage.SelectedRun == null);
+            }
             _tabs[(int)StudioTab.Scene].Text = _session.Candidates.Count > 0
                 ? $"{Tr("studio/tab_scene")}  {_session.Candidates.Count}"
                 : Tr("studio/tab_scene");
@@ -317,6 +362,10 @@ namespace Cthangover.Mods.ScenarioStudio
             Clear(_content);
             switch (_tab)
             {
+                case StudioTab.Background:
+                    _backgroundPage.Visible = true;
+                    _backgroundPage.Refresh();
+                    break;
                 case StudioTab.Now when _mode == StudioMode.Author:
                     _nowPage.Build(_content, _session);
                     break;
@@ -340,6 +389,14 @@ namespace Cthangover.Mods.ScenarioStudio
 
         private void RefreshFooter()
         {
+            _applyButton.Visible = _tab != StudioTab.Background;
+            if (_tab == StudioTab.Background)
+            {
+                _statusLabel.Text = Tr("studio/background_footer");
+                _editButton.Visible = true; _editButton.Disabled = _backgroundPage.SelectedScenarioId == null;
+                _editButton.Text = Tr("studio/background_edit");
+                return;
+            }
             var pending = _session.PendingCount;
             _statusLabel.Text = _status ?? (pending == 0 ? Tr("studio/no_pending") : string.Format(Tr("studio/pending"), pending));
             _applyButton.Disabled = pending == 0 && _editor == null;
@@ -352,6 +409,7 @@ namespace Cthangover.Mods.ScenarioStudio
         {
             foreach (var child in container.GetChildren())
             {
+                if (child is StudioBackgroundPage background) { background.Visible = false; continue; }
                 container.RemoveChild(child);
                 child.QueueFree();
             }
@@ -399,11 +457,14 @@ namespace Cthangover.Mods.ScenarioStudio
         private void OnLogTabPressed() => ShowTab(StudioTab.Log);
 
         private void OnMapTabPressed() => ShowTab(StudioTab.Map);
+        private void OnBackgroundTabPressed() => ShowTab(StudioTab.Background);
 
         private void OnClosePressed() => Hide();
 
         private void OnPausePressed()
         {
+            if (_tab == StudioTab.Background)
+            { _backgroundPage.Send(_backgroundPage.SelectedRun?.Paused == true ? "continue" : "pause"); return; }
             if (Live.Debugger.IsPaused)
                 Live.Debugger.Continue(Live.Box);
             else
@@ -413,6 +474,7 @@ namespace Cthangover.Mods.ScenarioStudio
 
         private void OnStepPressed()
         {
+            if (_tab == StudioTab.Background) { _backgroundPage.Send("step"); return; }
             var box = Live.Box;
             if (box != null && box.IsWaitingAnswer && !box.Runtime.IsHeld)
             {
@@ -425,12 +487,14 @@ namespace Cthangover.Mods.ScenarioStudio
 
         private void OnContinuePressed()
         {
+            if (_tab == StudioTab.Background) { _backgroundPage.Send("continue"); return; }
             Live.Debugger.Continue(Live.Box);
             Changed();
         }
 
         private void OnRestartPicked(long id)
         {
+            if (_tab == StudioTab.Background) { _backgroundPage.Send("restart"); return; }
             CloseEditor();
             switch (id)
             {
@@ -498,6 +562,7 @@ namespace Cthangover.Mods.ScenarioStudio
 
         private void OnEditPressed()
         {
+            if (_tab == StudioTab.Background) { _backgroundPage.OpenEditor(); return; }
             if (_editor != null)
             {
                 CloseEditor();

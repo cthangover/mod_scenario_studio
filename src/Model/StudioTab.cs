@@ -8,5 +8,6 @@ namespace Cthangover.Mods.ScenarioStudio
         State,
         Log,
         Map,
+        Background,
     }
 }

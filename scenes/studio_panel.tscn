@@ -199,6 +199,11 @@ layout_mode = 2
 focus_mode = 0
 toggle_mode = true
 
+[node name="BackgroundTab" type="Button" parent="Frame/Dock/Column/Tabs/Row"]
+layout_mode = 2
+focus_mode = 0
+toggle_mode = true
+
 [node name="RuleTabs" type="ColorRect" parent="Frame/Dock/Column"]
 custom_minimum_size = Vector2(0, 1)
 layout_mode = 2
