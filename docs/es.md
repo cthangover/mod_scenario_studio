@@ -53,3 +53,9 @@ En el grupo **Objeto (self.)** aparecen los flags `self.` del objeto cuyo diálo
 1. **No hay botón de Estudio.** La colección del juego no incluye el estudio; añade el conjunto Developer Tools o arranca con `--studio`.
 2. **Paso no hace nada.** El diálogo espera una respuesta: elige una primero.
 3. **Otros jugadores no ven un cambio.** Los cambios de la capa de estudio se quedan en este juego en este ordenador; exporta la capa como mod para compartirlos.
+
+## Escenarios de fondo simultáneos
+
+`channel: ambient` usa `npc_barks_base` fuera del diálogo modal. Cada ejecución conserva sus variables, esperas, roles y depurador. Scenario Editor valida y guarda; F5 prueba el búfer. Studio → Background muestra definiciones y ejecuciones, con pausa, pasos, puntos de ruptura y reloj independientes.
+
+[npc_barks_base](../../npc_barks_base/docs/en.md)

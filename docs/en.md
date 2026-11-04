@@ -51,3 +51,9 @@ The **State** tab shows the game state grouped by owner: the clock, the variable
 1. **There is no Studio button.** The game's collection does not include the studio; add the Developer Tools toolset or launch with `--studio`.
 2. **Step does nothing.** The dialog waits for an answer: pick one first.
 3. **Other players do not see a change.** Changes in the studio layer stay in this game on this computer; export the layer as a mod to share them.
+
+## Concurrent background scenarios
+
+`channel: ambient` runs through `npc_barks_base` outside the modal dialog queue. Each execution has its own variables, waits, roles and debugger. Scenario Editor validates/saves the source and F5 previews its buffer. Studio → Background lists definitions and runs; pause, step, breakpoints and clock advance target one execution.
+
+[npc_barks_base](../../npc_barks_base/docs/en.md)

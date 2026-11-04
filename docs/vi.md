@@ -53,3 +53,9 @@ Nhóm **Đối tượng (self.)** liệt kê các cờ `self.` của đối tư�
 1. **Không có nút Xưởng.** Bộ sưu tập của game không chứa xưởng; hãy thêm bộ Developer Tools hoặc chạy với `--studio`.
 2. **Từng bước không làm gì.** Hội thoại đang chờ một câu trả lời: hãy chọn một cái trước.
 3. **Người chơi khác không thấy thay đổi.** Thay đổi trong lớp xưởng chỉ ở lại game này trên máy này; hãy xuất lớp thành mod để chia sẻ.
+
+## Kịch bản nền đồng thời
+
+`channel: ambient` chạy qua `npc_barks_base` ngoài hàng đợi hội thoại modal. Mỗi lần chạy có biến, chờ, vai trò và trình gỡ lỗi riêng. Scenario Editor kiểm tra/lưu; F5 chạy thử bộ đệm. Studio → Background liệt kê định nghĩa và lần chạy; tạm dừng, bước, điểm dừng và đồng hồ chỉ tác động lần chạy được chọn.
+
+[npc_barks_base](../../npc_barks_base/docs/en.md)
