@@ -5,7 +5,7 @@
     "src/*.cs"
   ],
   "depends": [
-    "cthangover_game>=1",
+    "cthangover_game>=0.1.0",
     "cooking>=1"
   ]
 }
