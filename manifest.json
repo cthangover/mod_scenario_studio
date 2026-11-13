@@ -9,9 +9,9 @@
     "src/**/*.cs"
   ],
   "depends": [
-    "ui_base>=1",
-    "dialog_base>=1",
-    "scenario_tools_base>=1"
+    "ui_base>=0.1.0",
+    "dialog_base>=0.1.0",
+    "scenario_tools_base>=0.1.0"
   ],
   "ui": [
     {

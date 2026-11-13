@@ -134,7 +134,7 @@ namespace Cthangover.Mods.ScenarioStudio
                 "  \"author\": \"studio\",\n" +
                 "  \"description\": \"Exported from the scenario studio layer.\",\n" +
                 "  \"category\": \"content\",\n" +
-                "  \"depends\": [\"dialog_base>=1\"]\n" +
+                "  \"depends\": [\"dialog_base>=0.1.0\"]\n" +
                 "}\n";
             File.WriteAllText(Path.Combine(target, "manifest.json"), manifest);
             GameLogger.Log("UI", $"Scenario studio: layer exported as mod '{modId}' to {target}");
