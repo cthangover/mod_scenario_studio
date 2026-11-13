@@ -6,6 +6,6 @@
   ],
   "depends": [
     "cthangover_game>=0.1.0",
-    "cooking>=1"
+    "cooking>=0.1.0"
   ]
 }
