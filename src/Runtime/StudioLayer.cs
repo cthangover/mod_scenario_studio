@@ -133,7 +133,7 @@ namespace Cthangover.Mods.ScenarioStudio
                 "  \"version\": \"0.1.0\",\n" +
                 "  \"author\": \"studio\",\n" +
                 "  \"description\": \"Exported from the scenario studio layer.\",\n" +
-                "  \"category\": \"content\",\n" +
+                "  \"categories\": [\"content\"],\n" +
                 "  \"depends\": [\"dialog_base>=0.1.0\"]\n" +
                 "}\n";
             File.WriteAllText(Path.Combine(target, "manifest.json"), manifest);
