@@ -76,11 +76,17 @@ namespace Cthangover.Mods.ScenarioStudio.Tests.Live
         private int _failed;
         private double _elapsed;
         private bool _finished;
+        private readonly double _tickSeconds;
+        private int _waitingStep = -2;
+        private ulong _waitStarted;
+        private ulong _readyFrame;
 
+        /// <summary>Screenshot runs retain their pacing; other runs follow the dock and dialog state.</summary>
         public StudioLiveDriverNode(string shotsDir)
         {
             _shotsDir = shotsDir;
-            var timer = new Timer { WaitTime = TickSeconds, Autostart = true };
+            _tickSeconds = string.IsNullOrEmpty(shotsDir) ? 0.05 : TickSeconds;
+            var timer = new Timer { WaitTime = _tickSeconds, Autostart = true };
             AddChild(timer);
             timer.Timeout += Tick;
         }
@@ -94,7 +100,7 @@ namespace Cthangover.Mods.ScenarioStudio.Tests.Live
             if (_finished)
                 return;
 
-            _elapsed += TickSeconds;
+            _elapsed += _tickSeconds;
             if (_elapsed >= TimeoutSeconds)
             {
                 Fail($"timeout ({TimeoutSeconds:0}s) at step {_step}");
@@ -105,6 +111,8 @@ namespace Cthangover.Mods.ScenarioStudio.Tests.Live
             if (_step < 0 && !QuestionIsUp())
                 return;
 
+            if (string.IsNullOrEmpty(_shotsDir) && !NextStepIsReady())
+                return;
             _step++;
             switch (_step)
             {
@@ -318,6 +326,76 @@ namespace Cthangover.Mods.ScenarioStudio.Tests.Live
                     Finish();
                     break;
             }
+        }
+
+        private bool NextStepIsReady()
+        {
+            var next = _step + 1;
+            var now = Time.GetTicksMsec();
+            if (_waitingStep != next)
+            {
+                _waitingStep = next;
+                _waitStarted = now;
+                _readyFrame = 0;
+            }
+            if (now - _waitStarted > 15000)
+            {
+                Fail($"timed out waiting for dock/dialog readiness at step {next}");
+                Cleanup();
+                Finish();
+                return false;
+            }
+            var ready = next switch
+            {
+                0 => QuestionIsUp(),
+                1 => UiHost.Instance.TryGetInstance(EntryId, out var panel) && panel is StudioPanel && panel.Visible,
+                2 => _panel.Session.RunState == StudioRunState.Paused,
+                3 => _panel.Mode == StudioMode.Novice && CountOf<StudioBranchView>() == _answers,
+                4 => CountOf<StudioBranchView>() == _answers + 1,
+                5 or 24 => HasVisiblePicker(),
+                6 => Broken() == 0,
+                7 => CountOf<StudioSayView>() == 2,
+                8 or 12 or 15 => CurrentAction() is ActionText text && text.Text == TranslationServer.Translate("studio/new_line_text") && Box.IsRunning,
+                9 or 17 => Box.IsWaitingAnswer && Box.AnswerVariantCount == _answers + 1,
+                10 => CountOf<StudioCodeLineView>() > 0,
+                11 => Live.Debugger.HasBreakpoint(_scenario, _questionLine),
+                13 => Box.Runtime.IsHeld && _panel.Session.RunState == StudioRunState.Held,
+                14 => Box.Runtime.IsHeld && IsCurrentLine(_panel.Session, _movedLine),
+                16 => Box.Runtime.IsHeld && Live.CurrentLine() == _questionLine,
+                18 => _panel.Tab == StudioTab.Scene,
+                19 => _panel.Tab == StudioTab.State,
+                20 => _panel.Tab == StudioTab.Log,
+                21 => _panel.Tab == StudioTab.Map,
+                22 => StudioBackgrounds.SourceOf(LayerBackground) == StudioLayer.Id,
+                23 or 28 => HasVisiblePrompt(),
+                25 => File.Exists(Path.Combine(Live.Layer.RootPath, "scenes", NewScene + ".json")),
+                26 => SceneManager.GetCurrentSceneName() == NewScene && Box?.Locker is ScenarioEvent && ShownBackgroundSize() == FirstSize,
+                27 => ShownBackgroundSize() == SecondSize,
+                29 => File.Exists(Path.Combine(ProjectSettings.GlobalizePath("user://mods/"), ExportId, "manifest.json")),
+                30 => SceneManager.GetCurrentSceneName() == "home_kitchen",
+                _ => !_panel.Visible
+            };
+            if (!ready || GodotSceneService.IsTransitioning)
+            {
+                _readyFrame = 0;
+                return false;
+            }
+            if (_readyFrame == 0) _readyFrame = Engine.GetProcessFrames();
+            return Engine.GetProcessFrames() - _readyFrame >= 2;
+        }
+
+        private bool HasVisiblePicker()
+        {
+            foreach (var child in _panel.GetChildren())
+                if (child is PopupMenu { Visible: true }) return true;
+            return false;
+        }
+
+        private bool HasVisiblePrompt()
+        {
+            foreach (var child in _panel.GetChildren())
+                if (child is ConfirmationDialog { Visible: true }) return true;
+            return false;
         }
 
         private static bool IsCurrentLine(StudioSession session, int number)
