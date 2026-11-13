@@ -4,7 +4,7 @@
   "version": "0.1.0",
   "author": "ct",
   "description": "A dock beside the running game that pauses, steps and edits the playing scenario: breakpoints, restarts with state rollback, live edits into a mod or a per-game layer.",
-  "category": "tools, editor",
+  "categories": ["tools", "editor"],
   "sources": [
     "src/**/*.cs"
   ],
