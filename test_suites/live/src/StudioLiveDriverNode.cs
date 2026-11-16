@@ -380,8 +380,8 @@ namespace Cthangover.Mods.ScenarioStudio.Tests.Live
                 _readyFrame = 0;
                 return false;
             }
-            if (_readyFrame == 0) _readyFrame = Engine.GetProcessFrames();
-            return Engine.GetProcessFrames() - _readyFrame >= 2;
+            if (_readyFrame == 0) _readyFrame = Godot.Engine.GetProcessFrames();
+            return Godot.Engine.GetProcessFrames() - _readyFrame >= 2;
         }
 
         private bool HasVisiblePicker()
