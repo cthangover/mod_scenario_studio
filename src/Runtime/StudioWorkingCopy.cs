@@ -1,6 +1,7 @@
 namespace Cthangover.Mods.ScenarioStudio
 {
     using System.Collections.Generic;
+    using System.Text;
 
     /// <summary>
     /// Unapplied edits of one scenario: its text as lines plus which lines were
@@ -17,12 +18,28 @@ namespace Cthangover.Mods.ScenarioStudio
         private readonly List<string> _lines;
         private readonly List<bool> _changed;
         private readonly List<int> _origin;
+        private readonly string lineEnding;
+        private readonly List<string> endings = new();
+
+        /// <summary>Exact authored baseline used to validate displayed coordinates against the active reader snapshot.</summary>
+        public string OriginalText { get; }
 
         public string ScenarioName { get; }
 
         public StudioWorkingCopy(string scenarioName, string text)
         {
             ScenarioName = scenarioName;
+            OriginalText = text ?? string.Empty;
+            lineEnding = OriginalText.Contains("\r\n") ? "\r\n" : "\n";
+            for (var i = 0; i < OriginalText.Length; i++)
+            {
+                if (OriginalText[i] == '\n')
+                {
+                    endings.Add(i > 0 && OriginalText[i - 1] == '\r' ? "\r\n" : "\n");
+                }
+            }
+
+            endings.Add(string.Empty);
             _lines = new List<string>((text ?? string.Empty).Replace("\r\n", "\n").Split('\n'));
             _changed = new List<bool>(new bool[_lines.Count]);
             _origin = new List<int>(_lines.Count);
@@ -33,7 +50,36 @@ namespace Cthangover.Mods.ScenarioStudio
         /// <summary>Original (1-based) number of the displayed line <paramref name="number"/>; 0 for an added line.</summary>
         public int OriginalNumber(int number) => number >= 1 && number <= _origin.Count ? _origin[number - 1] : 0;
 
-        public string Text => string.Join("\n", _lines);
+        /// <summary>
+        /// Only retained, unedited baseline rows may address the running queue while other edits shift their
+        /// display position.
+        /// </summary>
+        public bool CanNavigateOriginalLine(int originalLine)
+        {
+            for (var i = 0; i < _origin.Count; i++)
+            {
+                if (_origin[i] == originalLine && !_changed[i])
+                {
+                    return originalLine > 0;
+                }
+            }
+
+            return false;
+        }
+
+        public string Text
+        {
+            get
+            {
+                var text = new StringBuilder();
+                for (var i = 0; i < _lines.Count; i++)
+                {
+                    text.Append(_lines[i]).Append(endings[i]);
+                }
+
+                return text.ToString();
+            }
+        }
 
         public int LineCount => _lines.Count;
 
@@ -61,6 +107,24 @@ namespace Cthangover.Mods.ScenarioStudio
         public void Insert(int index, params string[] lines)
         {
             index = System.Math.Clamp(index, 0, _lines.Count);
+            if (lines.Length == 0)
+            {
+                return;
+            }
+
+            var atEnd = index == _lines.Count;
+            if (atEnd && endings.Count > 0)
+            {
+                endings[^1] = lineEnding;
+            }
+
+            var insertedEndings = new List<string>();
+            for (var i = 0; i < lines.Length; i++)
+            {
+                insertedEndings.Add(atEnd && i == lines.Length - 1 ? string.Empty : lineEnding);
+            }
+
+            endings.InsertRange(index, insertedEndings);
             _lines.InsertRange(index, lines);
             _changed.InsertRange(index, NewFlags(lines.Length));
             _origin.InsertRange(index, new int[lines.Length]);
@@ -98,6 +162,16 @@ namespace Cthangover.Mods.ScenarioStudio
                     _lines.Add(lines[i]);
                     _changed.Add(true);
                     _origin.Add(0);
+                    endings.Add(string.Empty);
+                }
+
+                if (i == lines.Length - 1)
+                {
+                    endings[i] = string.Empty;
+                }
+                else if (endings[i].Length == 0)
+                {
+                    endings[i] = lineEnding;
                 }
             }
 
@@ -106,6 +180,7 @@ namespace Cthangover.Mods.ScenarioStudio
                 _lines.RemoveRange(lines.Length, _lines.Count - lines.Length);
                 _changed.RemoveRange(lines.Length, _changed.Count - lines.Length);
                 _origin.RemoveRange(lines.Length, _origin.Count - lines.Length);
+                endings.RemoveRange(lines.Length, endings.Count - lines.Length);
             }
         }
 
