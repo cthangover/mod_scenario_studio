@@ -6,7 +6,7 @@ It has two modes: **Novice** shows the story moment in plain blocks; **Author** 
 
 ## Opening it
 
-A game that includes the Developer Tools toolset (mechanic *Scenario Studio*) has a **Studio** button — the quill — on its toolbar. The launch flag `--studio` opens the dock at start. The pictures below are from the Cthangover kitchen; edits went into a test layer, never into the game's own files.
+A game that includes the Developer Tools toolset (mechanic *Scenario Studio*) has a **Studio** button — the quill — on its toolbar. The launch flag `--studio` opens the dock at start. The kitchen examples below show the original dock workflow; the include examples use a small scenario inside the running Cthangover game. Edits go into a test layer, leaving the game's own files unchanged.
 
 ## Novice mode
 
@@ -30,6 +30,20 @@ The **Now** tab shows the moment on the screen: the line, the question and every
 ![The dock after Apply: on screen now "New line", the status "Applied to "my_studio": scenario restarted with rollback".](assets/dock-applied.jpg)
 
 **Restart** offers: the scenario again without rollback, the scenario again **with state rollback** (flags, items, the clock and the rest are put back as they were when the scenario started), the scene again, or continuing from the current label.
+
+## Included files and source lines
+
+Author mode shows the original root file, including its header, include directives and runtime variables such as `${name}`. Included fragments run without being pasted into the root when it is saved. For explicit includes, keep `include_syntax: explicit-v1` in the scenario header and write directives such as `$include{parts/greeting.txt}` in its body. Existing scenarios keep their selected include mode.
+
+While an included fragment runs, the current marker stays on its root include directive. A breakpoint or next-line target there selects its **first actual action**. An empty include has no executable target. Its row is shown in red with a no-executable-position message even when the source binding is current; this is the present UI indication for an unavailable target, not an unknown-command error. Restart does not give an empty include an action. The label restart option uses the nearest valid label in the running expanded program, including labels inside included fragments.
+
+Inserted rows have no target in the program that is already running. Retained rows keep their original targets as they move; new or changed executable rows get their targets after Apply and restart. If a source file changes outside Studio or another source replaces it, the dock shows that its line mapping is unavailable until restart. It does not guess a nearby target.
+
+Apply preserves the authored root text and its line endings. Saving into a Studio layer also copies the exact raw include dependencies used by the edited root. Conflicting existing layer files or a different include lookup are refused before the root is replaced; the refusal is shown in the dock. Resolve the conflicting layer files, then apply again.
+
+[![Included second is playing while the Author dock keeps the raw header, runtime token and include directives. The current marker and breakpoint stay on root line 5; the breadcrumb is :deep. Empty include row 6 is red because it has no executable position.](assets/studio-projection-includes.png)](assets/studio-projection-includes.png)
+
+[![After Apply, the dock shows the my_studio layer and the unchanged raw header and include directives; root row 7 contains the edited tail.](assets/studio-projection-layer.png)](assets/studio-projection-layer.png)
 
 ## Inspecting state
 
