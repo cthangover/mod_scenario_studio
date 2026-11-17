@@ -34,6 +34,12 @@
       "activate": [
         "--itest=studio_live"
       ]
+    },
+    {
+      "id": "projection",
+      "activate": [
+        "--itest=studio_projection"
+      ]
     }
   ]
 }

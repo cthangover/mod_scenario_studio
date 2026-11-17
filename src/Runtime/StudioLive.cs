@@ -40,6 +40,7 @@ namespace Cthangover.Mods.ScenarioStudio
         private readonly Dictionary<string, StudioWorkingCopy> _copies = new();
         private StudioSnapshot _snapshot;
         private StudioSnapshot _checkpoint;
+        private double sourceCheckRemaining;
 
         public static StudioLive Instance { get; private set; }
 
@@ -49,6 +50,12 @@ namespace Cthangover.Mods.ScenarioStudio
 
         /// <summary>Grows on every change worth redrawing.</summary>
         public int Version { get; private set; }
+
+        /// <summary>
+        /// Concrete save refusal shown through the existing line diagnostics instead of writing an inconsistent
+        /// source layer.
+        /// </summary>
+        public StudioText LastEditError { get; private set; }
 
         public StudioLive(StudioLayer layer)
         {
@@ -79,9 +86,24 @@ namespace Cthangover.Mods.ScenarioStudio
                 Instance = null;
         }
 
+        /// <summary>Invalidates visible coordinates when authored sources move while a held dialog produces no further actions.</summary>
+        public override void _Process(double delta)
+        {
+            sourceCheckRemaining -= delta;
+            if (sourceCheckRemaining <= 0)
+            {
+                sourceCheckRemaining = .25;
+                if (IsCurrentRunning)
+                {
+                    _ = HasSourceProjection;
+                }
+            }
+        }
+
         // ── what is running ────────────────────────────────────────
 
-        public DialogBox Box => SceneContextNode.FindNode<DialogBox>("DialogBox");
+        /// <summary>A modal box is optional during boot, in the frontend and in shells without modal dialogs.</summary>
+        public DialogBox Box => IsInsideTree() ? GetTree()?.Root?.FindChild("DialogBox", true, false) as DialogBox : null;
 
         public static string SceneName => SceneManager.GetCurrentSceneName();
 
@@ -117,20 +139,20 @@ namespace Cthangover.Mods.ScenarioStudio
             var runtime = Box.Runtime;
             var queue = runtime.Dialog?.Queue;
             var index = runtime.Index;
-            return queue != null && index >= 0 && index < queue.Count ? queue[index]?.SourceLine ?? 0 : 0;
+            var expanded = queue != null && index >= 0 && index < queue.Count ? queue[index]?.SourceLine ?? 0 : 0;
+            return Debugger.RootLine(Box, expanded);
         }
 
         /// <summary>True when the running dialog has an action built from scenario line <paramref name="line"/>, so it can run next.</summary>
         public bool CanRunFrom(int line)
         {
-            var queue = IsCurrentRunning ? Box.Runtime.Dialog?.Queue : null;
-            return line > 0 && queue != null && StudioDebugger.IndexOf(queue, line) >= 0;
+            return CanNavigateOriginalLine(line) && Debugger.FirstActionIndex(Box, line) >= 0;
         }
 
         /// <summary>Makes scenario line <paramref name="line"/> the next one to run (<see cref="StudioDebugger.SetNext"/>) and logs it.</summary>
         public bool SetNextLine(int line)
         {
-            if (!Debugger.SetNext(Box, line))
+            if (!CanRunFrom(line) || !Debugger.SetNext(Box, line))
                 return false;
             Journal.Add(StudioLogCategory.Stop, new StudioText("studio/log_text_next_line", line));
             return true;
@@ -142,8 +164,55 @@ namespace Cthangover.Mods.ScenarioStudio
             if (evt == null)
                 return null;
             if (!string.IsNullOrEmpty(evt.SourceModId))
-                return ScenarioDefs.ReadText(evt.SourceModId, evt.SourcePath) ?? evt.ScenarioText;
+                return ScenarioDefs.ReadSource(evt.SourceModId, evt.SourcePath)?.RawText
+                    ?? ModManager.Instance.ReadFileText(evt.SourceModId, evt.SourcePath);
             return evt.ScenarioText;
+        }
+
+        /// <summary>Whether current event text, source provider and queue still match the debugger's immutable binding.</summary>
+        public bool HasSourceProjection => Debugger.IsProjectionCurrent(CurrentEvent, Box?.Runtime.Dialog?.Queue);
+
+        /// <summary>Pending text may shift retained rows, but changed/new rows cannot address the active program.</summary>
+        public bool CanNavigateOriginalLine(int rootLine)
+        {
+            if (!HasSourceProjection || rootLine <= 0)
+            {
+                return false;
+            }
+
+            if (Debugger.Projection.Source != null && !Debugger.Projection.Source.CanProjectRootLine(rootLine))
+            {
+                return false;
+            }
+
+            var copy = Copy(CurrentEvent?.ID);
+            var baseline = Debugger.Projection.Source?.RawText ?? Debugger.Projection.ExpandedText;
+            return copy == null || copy.OriginalText == baseline && copy.CanNavigateOriginalLine(rootLine);
+        }
+
+        /// <summary>Applies the UI's root-row breakpoint only to an exact current queue target.</summary>
+        public bool ToggleBreakpoint(string scenario, int rootLine)
+        {
+            if (scenario != CurrentEvent?.ID || !CanNavigateOriginalLine(rootLine)
+                || Debugger.Projection.FirstActionIndex(rootLine) < 0)
+            {
+                return false;
+            }
+
+            Debugger.ToggleBreakpoint(scenario, rootLine);
+            return true;
+        }
+
+        /// <summary>Nearest unique real label in the exact expanded active program, including labels inside nested fragments.</summary>
+        public bool TryActiveLabel(out string label)
+        {
+            label = null;
+            if (!IsCurrentRunning || !HasSourceProjection)
+            {
+                return false;
+            }
+
+            return Debugger.Projection.TryPreviousLabel(Box.Runtime.CurrentAction?.SourceLine ?? 0, out label);
         }
 
         /// <summary>The mod (or layer) a scenario file belongs to and how the studio may touch it.</summary>
@@ -179,25 +248,36 @@ namespace Cthangover.Mods.ScenarioStudio
             if (evt == null)
                 return null;
             if (!_copies.TryGetValue(evt.ID, out var copy))
-                _copies[evt.ID] = copy = new StudioWorkingCopy(evt.ID, SourceText(evt));
+            {
+                var text = SourceText(evt);
+                if (text == null)
+                {
+                    return null;
+                }
+
+                _copies[evt.ID] = copy = new StudioWorkingCopy(evt.ID, text);
+            }
             return copy;
         }
 
         /// <summary>Inserts lines before 0-based line <paramref name="index"/> of the current scenario.</summary>
         public void Insert(int index, params string[] lines)
         {
+            LastEditError = null;
             EnsureCopy()?.Insert(index, lines);
             Touch();
         }
 
         public void ReplaceLine(int index, string line)
         {
+            LastEditError = null;
             EnsureCopy()?.Replace(index, line);
             Touch();
         }
 
         public void ReplaceText(string text)
         {
+            LastEditError = null;
             EnsureCopy()?.ReplaceAll(text);
             Touch();
         }
@@ -236,6 +316,7 @@ namespace Cthangover.Mods.ScenarioStudio
 
         public void Discard()
         {
+            LastEditError = null;
             var evt = CurrentEvent;
             if (evt != null && _copies.Remove(evt.ID))
                 Touch();
@@ -249,10 +330,16 @@ namespace Cthangover.Mods.ScenarioStudio
         /// </summary>
         public StudioModScope Apply()
         {
+            LastEditError = null;
             var evt = CurrentEvent;
             var copy = Copy(evt?.ID);
             if (copy == null || copy.PendingCount == 0)
                 return null;
+
+            if (!string.IsNullOrEmpty(evt.SourceModId) && SourceText(evt) != copy.OriginalText)
+            {
+                return RejectEdit("studio/error_source_changed");
+            }
 
             if (string.IsNullOrEmpty(evt.SourceModId))
             {
@@ -264,10 +351,19 @@ namespace Cthangover.Mods.ScenarioStudio
 
             var target = EditScopeFor(ScopeOf(evt.SourceModId, evt.SourcePath));
             var pending = copy.PendingCount;
-            if (target.Kind == StudioScopeKind.Layer)
-                Layer.Write(evt.SourcePath, copy.Text);
-            else
-                File.WriteAllText(ModManager.Instance.GetFileSystemPath(evt.SourceModId, evt.SourcePath), copy.Text);
+            var provider = ModOverlays.TryGet(evt.SourceModId, out var overlay)
+                ? overlay : ModManager.Instance.GetMod(evt.SourceModId)?.FileProvider;
+            var destination = target.Kind == StudioScopeKind.Layer ? Layer.RootPath : provider?.RootPath;
+            if (destination == null)
+            {
+                return RejectEdit("studio/error_layer_write_failed");
+            }
+
+            if (!StudioSourceSave.TrySave(provider, evt.SourceModId, evt.SourcePath,
+                copy.OriginalText, copy.Text, destination, out var error))
+            {
+                return RejectEdit(error);
+            }
 
             _copies.Remove(evt.ID);
             SceneManager.ReloadContent();
@@ -275,6 +371,14 @@ namespace Cthangover.Mods.ScenarioStudio
             GameLogger.Log("UI", $"Scenario studio: applied {pending} change(s) of '{evt.ID}' to '{target.ModId}'");
             Restart(StudioRestartMode.Rollback);
             return target;
+        }
+
+        private StudioModScope RejectEdit(string key)
+        {
+            LastEditError = new StudioText(key);
+            Journal.Add(StudioLogCategory.Edit, LastEditError);
+            Touch();
+            return null;
         }
 
         // ── restarts and navigation ────────────────────────────────
@@ -298,7 +402,11 @@ namespace Cthangover.Mods.ScenarioStudio
                     RunScenario(name, null, evt);
                     return;
                 case StudioRestartMode.FromLabel:
-                    var label = LabelAbove(SourceText(evt), CurrentLine());
+                    if (!TryActiveLabel(out var label))
+                    {
+                        return;
+                    }
+
                     StopDialog();
                     ForgetCompleted(name);
                     RunScenario(name, label, evt);
@@ -368,8 +476,14 @@ namespace Cthangover.Mods.ScenarioStudio
             ScenarioEvent evt;
             if (def != null)
             {
-                var text = ScenarioDefs.ReadText(def.ModId, def.FilePath);
-                evt = factory.CreateFromDefinition(text, name, def.Condition, def.LightUseTime, def.IsOneRun, def.ModId, def.FilePath) as ScenarioEvent;
+                var source = ScenarioDefs.ReadSource(def.ModId, def.FilePath);
+                if (source == null)
+                {
+                    return false;
+                }
+
+                evt = factory.CreateFromDefinition(source.ExpandedText, name, def.Condition, def.LightUseTime,
+                    def.IsOneRun, def.ModId, def.FilePath) as ScenarioEvent;
             }
             else if (replaced != null && IsInstanceValid(replaced))
             {
@@ -407,20 +521,6 @@ namespace Cthangover.Mods.ScenarioStudio
                     if (def.Name == name)
                         return def;
                 }
-            }
-            return null;
-        }
-
-        private static string LabelAbove(string text, int line)
-        {
-            if (text == null || line <= 0)
-                return null;
-            var lines = text.Replace("\r\n", "\n").Split('\n');
-            for (var i = Math.Min(line, lines.Length) - 1; i >= 0; i--)
-            {
-                var trimmed = lines[i].Trim();
-                if (trimmed.StartsWith(':'))
-                    return trimmed.Substring(1).Trim();
             }
             return null;
         }

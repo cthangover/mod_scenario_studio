@@ -2,6 +2,7 @@ namespace Cthangover.Mods.ScenarioStudio
 {
     using System;
     using System.Collections.Generic;
+    using Cthangover.Core.Mods.Resolvers;
     using Cthangover.Mods.Dialog;
     using Cthangover.Mods.Dialog.Action;
     using Cthangover.Mods.Dialog.Executable;
@@ -29,6 +30,9 @@ namespace Cthangover.Mods.ScenarioStudio
         /// <summary>The scenario event the debugger last saw run.</summary>
         public ScenarioEvent Event { get; private set; }
 
+        /// <summary>Exact active queue's reader provenance; source drift keeps this snapshot stale until an actual rebind.</summary>
+        public StudioSourceProjection Projection { get; private set; }
+
         public bool IsPaused { get; private set; }
 
         /// <summary>Scenario line the dialog is held at, 0 when not held.</summary>
@@ -48,27 +52,30 @@ namespace Cthangover.Mods.ScenarioStudio
             if (runtime.DialogBox == null || runtime.DialogBox.Locker is not ScenarioEvent scenario)
                 return false;
 
-            if (scenario != Event)
+            if (scenario != Event || Projection == null || !Projection.OwnsQueue(runtime.Dialog?.Queue))
             {
                 Event = scenario;
+                Projection = new StudioSourceProjection(ReadSource(scenario), scenario.ScenarioText, runtime.Dialog?.Queue,
+                    !string.IsNullOrEmpty(scenario.SourceModId));
                 _executed.Clear();
                 HeldLine = 0;
                 ScenarioStarted?.Invoke(scenario);
             }
 
+            var line = IsProjectionCurrent(scenario, runtime.Dialog?.Queue) ? Projection.RootLine(action.SourceLine) : 0;
             if (_allowOnce > 0)
             {
                 _allowOnce--;
-                return Pass(action);
+                return Pass(line);
             }
 
-            var breakpoint = action.SourceLine > 0 && HasBreakpoint(scenario.ID, action.SourceLine);
+            var breakpoint = line > 0 && HasBreakpoint(scenario.ID, line) && Projection.IsBreakpointAction(action, line);
             if (!IsPaused && !breakpoint)
-                return Pass(action);
+                return Pass(line);
 
             IsPaused = true;
-            HeldLine = action.SourceLine;
-            Held?.Invoke(action.SourceLine, breakpoint);
+            HeldLine = line;
+            Held?.Invoke(line, breakpoint);
             Changed?.Invoke();
             return true;
         }
@@ -143,7 +150,7 @@ namespace Cthangover.Mods.ScenarioStudio
             if (line <= 0 || queue == null || !box.IsRunning || box.Locker != Event)
                 return false;
 
-            var target = IndexOf(queue, line);
+            var target = FirstActionIndex(box, line);
             if (target < 0 || !box.MoveTo(target))
                 return false;
 
@@ -158,6 +165,7 @@ namespace Cthangover.Mods.ScenarioStudio
         public void Reset()
         {
             Event = null;
+            Projection = null;
             HeldLine = 0;
             _allowOnce = 0;
             _executed.Clear();
@@ -183,10 +191,48 @@ namespace Cthangover.Mods.ScenarioStudio
             box.Resume();
         }
 
-        private bool Pass(IActionCommand action)
+        /// <summary>Checks source and actual queue identity; a stale snapshot never silently rebinds to a moving provider.</summary>
+        public bool IsProjectionCurrent(ScenarioEvent scenario, IReadOnlyList<IActionCommand> queue)
         {
-            if (action.SourceLine > 0)
-                _executed.Add(action.SourceLine);
+            if (scenario == null || scenario != Event || Projection == null || !Projection.IsUsable)
+            {
+                return false;
+            }
+
+            var wasUsable = Projection.IsUsable;
+            var current = Projection.Matches(scenario.ScenarioText, ReadSource(scenario), queue);
+            if (wasUsable && !current)
+            {
+                Changed?.Invoke();
+            }
+
+            return current;
+        }
+
+        /// <summary>Projected root row of an actual running expanded action; zero explicitly denotes unavailable correspondence.</summary>
+        public int RootLine(DialogBox box, int expandedLine)
+        {
+            return box != null && box.Locker == Event && IsProjectionCurrent(Event, box.Runtime.Dialog?.Queue)
+                ? Projection.RootLine(expandedLine) : 0;
+        }
+
+        /// <summary>First actual queue target for a root row; requires the currently running event's exact source binding.</summary>
+        public int FirstActionIndex(DialogBox box, int rootLine)
+        {
+            return box != null && box.IsRunning && box.Locker == Event
+                && IsProjectionCurrent(Event, box.Runtime.Dialog?.Queue) ? Projection.FirstActionIndex(rootLine) : -1;
+        }
+
+        private static ResolvedModText ReadSource(ScenarioEvent scenario)
+        {
+            return string.IsNullOrEmpty(scenario?.SourceModId)
+                ? null : ScenarioDefs.ReadSource(scenario.SourceModId, scenario.SourcePath);
+        }
+
+        private bool Pass(int line)
+        {
+            if (line > 0)
+                _executed.Add(line);
             Changed?.Invoke();
             return false;
         }

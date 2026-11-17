@@ -1,0 +1,10 @@
+{
+  "name": "Scenario Studio Source Projection",
+  "description": "One new raw include source projection, debug navigation and isolated raw layer roundtrip. Activated only by --itest=studio_projection.",
+  "sources": [
+    "src/*.cs"
+  ],
+  "depends": [
+    "cthangover_game>=0.1.0"
+  ]
+}

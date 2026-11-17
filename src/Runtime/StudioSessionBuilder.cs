@@ -60,19 +60,42 @@ namespace Cthangover.Mods.ScenarioStudio
 
             var running = live.IsCurrentRunning && live.Debugger.Event == evt;
             var current = live.IsCurrentRunning ? live.CurrentLine() : 0;
-            string label = null;
+            var projectionCurrent = live.HasSourceProjection;
+            var source = projectionCurrent ? live.Debugger.Projection.Source : null;
             foreach (var line in lines)
             {
-                line.SourceLine = copy != null ? copy.OriginalNumber(line.Number) : line.Number;
+                var original = copy != null ? copy.OriginalNumber(line.Number) : line.Number;
+                line.SourceLine = live.CanNavigateOriginalLine(original) ? original : 0;
                 line.IsNew = copy != null && copy.IsChanged(line.Number - 1);
+                if (source != null && source.RootIncludeLines.Contains(original)
+                    && line.Error?.Key == "studio/error_unknown_command")
+                {
+                    line.Error = null;
+                }
+
+                if (projectionCurrent && line.Error?.Key == "studio/error_label_missing"
+                    && live.Debugger.Projection.HasActualLabel(line.Target))
+                {
+                    line.Error = null;
+                }
+
+                if (running && line.SourceLine == 0 && !line.IsNew
+                    && line.Kind != StudioLineKind.Header && line.Kind != StudioLineKind.Comment)
+                {
+                    line.Error = new StudioText("studio/error_source_mapping_unavailable");
+                }
+
+                if (live.LastEditError != null && line.Kind != StudioLineKind.Header && line.Kind != StudioLineKind.Comment)
+                {
+                    line.Error ??= live.LastEditError;
+                }
+
                 line.HasBreakpoint = line.SourceLine > 0 && live.Debugger.HasBreakpoint(evt.ID, line.SourceLine);
                 line.IsCurrent = current > 0 && line.SourceLine == current;
                 line.IsDone = running && !line.IsCurrent && line.SourceLine > 0 && live.Debugger.IsExecuted(line.SourceLine);
                 line.CanRunNext = running && !line.IsCurrent && live.CanRunFrom(line.SourceLine);
-                if (line.Kind == StudioLineKind.Label && current > 0 && line.SourceLine > 0 && line.SourceLine < current)
-                    label = ":" + line.Target;
             }
-            session.LabelName = label;
+            session.LabelName = live.TryActiveLabel(out var label) && label != null ? ":" + label : null;
             session.Lines.AddRange(lines);
         }
 

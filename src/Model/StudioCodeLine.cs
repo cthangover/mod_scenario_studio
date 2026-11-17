@@ -13,9 +13,12 @@ namespace Cthangover.Mods.ScenarioStudio
     /// </summary>
     public sealed class StudioCodeLine
     {
-        /// <summary>1-based line number in the scenario text (header included), as in <c>SourceLine</c> of actions.</summary>
+        /// <summary>One-based displayed raw root row, including the authored header.</summary>
         public int Number { get; set; }
-        /// <summary>Number of this line in the text the running dialog was built from; 0 for a line added in the studio.</summary>
+        /// <summary>
+        /// Original authored root row; zero for new, changed or unmappable rows. Runtime action coordinates
+        /// remain expanded.
+        /// </summary>
         public int SourceLine { get; set; }
         public string Text { get; set; }
         public StudioLineKind Kind { get; set; }

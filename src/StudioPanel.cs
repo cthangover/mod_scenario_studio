@@ -519,7 +519,7 @@ namespace Cthangover.Mods.ScenarioStudio
         private void OnBreakpointToggled(StudioCodeLine line)
         {
             if (line.SourceLine > 0)
-                Live.Debugger.ToggleBreakpoint(_session.ScenarioName, line.SourceLine);
+                Live.ToggleBreakpoint(_session.ScenarioName, line.SourceLine);
             Changed();
         }
 
