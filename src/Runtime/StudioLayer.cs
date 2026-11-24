@@ -2,6 +2,7 @@ namespace Cthangover.Mods.ScenarioStudio
 {
     using System.Collections.Generic;
     using System.IO;
+    using System.Linq;
     using System.Text;
     using Cthangover.Core.Bootstrap;
     using Cthangover.Core.Games;
@@ -30,8 +31,6 @@ namespace Cthangover.Mods.ScenarioStudio
     public sealed class StudioLayer
     {
         public const string Id = "my_studio";
-        private const string LayerArg = "--studio-layer=";
-        private const string WriteArg = "--studio-write=layer";
 
         /// <summary>Absolute path of the layer folder.</summary>
         public string RootPath { get; }
@@ -39,18 +38,12 @@ namespace Cthangover.Mods.ScenarioStudio
         /// <summary>True when every edit goes to the layer, folder mods included.</summary>
         public bool ForceLayer { get; }
 
-        public StudioLayer(string[] args)
-        {
-            string dir = null;
-            foreach (var arg in args)
-            {
-                if (arg.StartsWith(LayerArg, System.StringComparison.Ordinal))
-                    dir = arg.Substring(LayerArg.Length);
-                if (arg == WriteArg)
-                    ForceLayer = true;
-            }
+        public StudioLayer(string[] args) : this(GameLaunchArgs.Parse(args)) { }
 
-            dir ??= "user://studio";
+        internal StudioLayer(GameLaunchArgs args)
+        {
+            var dir = args.GetAll<StudioLayerDirectoryParameter>().LastOrDefault()?.Value ?? "user://studio";
+            ForceLayer = args.Get<StudioWriteParameter>().Value;
             var game = string.IsNullOrEmpty(ActiveGame.Id) ? "dev" : ActiveGame.Id;
             RootPath = Path.Combine(ProjectSettings.GlobalizePath(dir), game);
         }

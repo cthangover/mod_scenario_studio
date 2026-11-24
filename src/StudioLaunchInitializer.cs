@@ -1,9 +1,8 @@
 namespace Cthangover.Mods.ScenarioStudio
 {
-    using System.Linq;
+    using Cthangover.Core.Games;
     using Cthangover.Core.Mods;
     using Cthangover.Core.Utils;
-    using Godot;
 
     /// <summary>
     /// Lifecycle entry of the studio mod. When resources are ready it mounts
@@ -16,7 +15,6 @@ namespace Cthangover.Mods.ScenarioStudio
     /// </summary>
     public class StudioLaunchInitializer : IModInitializer
     {
-        private const string Flag = "--studio";
 
         public void OnModLoaded(string modId) { }
 
@@ -25,13 +23,13 @@ namespace Cthangover.Mods.ScenarioStudio
             if (StudioLive.Instance != null)
                 return;
 
-            var args = OS.GetCmdlineUserArgs();
+            var args = GameLaunchArgs.Current;
             var layer = new StudioLayer(args);
             layer.Mount();
 
             ModRoot.AddDeferred(new StudioLive(layer));
 
-            if (!args.Contains(Flag))
+            if (!args.Contains<OpenStudioParameter>())
                 return;
             GameLogger.Log("UI", "Scenario studio: --studio given, the dock opens with the first scene");
             ModRoot.AddDeferred(new StudioAutoOpenNode());
